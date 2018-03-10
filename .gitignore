@@ -10,8 +10,8 @@ credulous
 *.mde
 credulous.md-e
 travis_build_number
-pkg/
 *.spec
 .vagrant/
 s3/
 *.pkg
+vendor
