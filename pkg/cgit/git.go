@@ -1,19 +1,21 @@
-package main
+package cgit
 
 import (
 	"errors"
 	"path"
 	"time"
 
-	"github.com/libgit2/git2go"
+	"github.com/prateeknayak/credulous/pkg/core"
+	git "gopkg.in/libgit2/git2go.v25"
 )
 
-type RepoConfig struct {
-	Name  string
-	Email string
+type GitImpl struct{}
+
+func NewGitImpl() *GitImpl {
+	return &GitImpl{}
 }
 
-func isGitRepo(checkpath string) (bool, error) {
+func (g *GitImpl) IsGitRepo(checkpath string) (bool, error) {
 	ceiling := []string{checkpath}
 
 	repopath, err := git.Discover(checkpath, false, ceiling)
@@ -24,7 +26,7 @@ func isGitRepo(checkpath string) (bool, error) {
 	if err != nil && err.Error() == nonRepoErr.Error() {
 		return false, nil
 	}
-	// the path is the parent of the repo, which appends '.git'
+	// the path is the parent of the repo, which appends '.cgit'
 	// to the path
 	dirpath := path.Dir(path.Clean(repopath))
 	if dirpath == checkpath {
@@ -33,33 +35,33 @@ func isGitRepo(checkpath string) (bool, error) {
 	return false, nil
 }
 
-func getRepoConfig(repo *git.Repository) (RepoConfig, error) {
+func (g *GitImpl) GetRepoConfig(repo *git.Repository) (core.RepoConfig, error) {
 	config, err := repo.Config()
 	if err != nil {
-		return RepoConfig{}, err
+		return core.RepoConfig{}, err
 	}
 	name, err := config.LookupString("user.name")
 	if err != nil {
-		return RepoConfig{}, err
+		return core.RepoConfig{}, err
 	}
 	email, err := config.LookupString("user.email")
 	if err != nil {
-		return RepoConfig{}, err
+		return core.RepoConfig{}, err
 	}
-	repoconf := RepoConfig{
+	repoconf := core.RepoConfig{
 		Name:  name,
 		Email: email,
 	}
 	return repoconf, nil
 }
 
-func gitAddCommitFile(repopath, filename, message string) (commitId string, err error) {
+func (g *GitImpl) GitAddCommitFile(repopath, filename, message string) (commitId string, err error) {
 	repo, err := git.OpenRepository(repopath)
 	if err != nil {
 		return "", err
 	}
 
-	config, err := getRepoConfig(repo)
+	config, err := g.GetRepoConfig(repo)
 	if err != nil {
 		return "", err
 	}
@@ -97,31 +99,33 @@ func gitAddCommitFile(repopath, filename, message string) (commitId string, err 
 	}
 
 	var commit *git.Oid
-	haslog, err := repo.HasLog("HEAD")
+
+	// TODO: find a non broken version of lib2git
+	//haslog, err := repo.HasLog("HEAD")
+	//if err != nil {
+	//	return "", err
+	//}
+	//if !haslog {
+	//	// In this case, the repo has been initialized, but nothing has ever been committed
+	//	commit, err = repo.CreateCommit("HEAD", sig, sig, message, tree)
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//} else {
+	// In this case, the repo has commits
+	currentBranch, err := repo.Head()
 	if err != nil {
 		return "", err
 	}
-	if !haslog {
-		// In this case, the repo has been initialized, but nothing has ever been committed
-		commit, err = repo.CreateCommit("HEAD", sig, sig, message, tree)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		// In this case, the repo has commits
-		currentBranch, err := repo.Head()
-		if err != nil {
-			return "", err
-		}
-		currentTip, err := repo.LookupCommit(currentBranch.Target())
-		if err != nil {
-			return "", err
-		}
-		commit, err = repo.CreateCommit("HEAD", sig, sig, message, tree, currentTip)
-		if err != nil {
-			return "", err
-		}
+	currentTip, err := repo.LookupCommit(currentBranch.Target())
+	if err != nil {
+		return "", err
 	}
+	commit, err = repo.CreateCommit("HEAD", sig, sig, message, tree, currentTip)
+	if err != nil {
+		return "", err
+	}
+	//}
 
 	return commit.String(), nil
 }

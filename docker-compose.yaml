@@ -1,0 +1,35 @@
+---
+version: '2.3'
+services:
+  base: &base
+    volumes:
+      - .:/go/src/github.com/MYOB-Technology/ops-kube-alerting-rules-operator
+    working_dir: /go/src/github.com/MYOB-Technology/ops-kube-alerting-rules-operator
+    build:
+      context: .
+      dockerfile: Dockerfile-alt
+      target: dep
+
+  go:
+    <<: *base
+    entrypoint: go
+
+  dep:
+    <<: *base
+    entrypoint: dep
+
+  console:
+    <<: *base
+    command: "/bin/sh"
+
+  gometalinter:
+    <<: *base
+    entrypoint: gometalinter
+
+  gofmt:
+    <<: *base
+    entrypoint: gofmt
+
+  goimports:
+    <<: *base
+    entrypoint: goimports

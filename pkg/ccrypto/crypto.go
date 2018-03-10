@@ -1,4 +1,4 @@
-package main
+package ccrypto
 
 import (
 	"crypto/aes"
@@ -7,46 +7,41 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"math/big"
 	"reflect"
 	"strings"
 
-	"code.google.com/p/go.crypto/ssh"
+	"golang.org/x/crypto/ssh"
 )
 
-type Salter interface {
-	GenerateSalt() (string, error)
+type aesEncryption struct {
+	EncodedKey string
+	Ciphertext string
 }
 
-type RandomSaltGenerator struct {
+type Crypto struct{}
+
+func NewCrypto() *Crypto {
+	return &Crypto{}
 }
 
-type StaticSaltGenerator struct {
-	salt string
-}
+const saltLength = 8
 
-func (ssg *StaticSaltGenerator) GenerateSalt() (string, error) {
-	return ssg.salt, nil
-}
+func (c *Crypto) GenerateSalt() (string, error) {
 
-func (sg *RandomSaltGenerator) GenerateSalt() (string, error) {
-	const SALT_LENGTH = 8
-	b := make([]byte, SALT_LENGTH)
+	b := make([]byte, saltLength)
 	_, err := rand.Read(b)
-	encoder := base64.StdEncoding
-	encoded := make([]byte, encoder.EncodedLen(len(b)))
-	encoder.Encode(encoded, b)
 	if err != nil {
 		return "", err
 	}
+	encoder := base64.StdEncoding
+	encoded := make([]byte, encoder.EncodedLen(len(b)))
+	encoder.Encode(encoded, b)
+
 	return string(encoded), nil
 }
 
@@ -65,11 +60,6 @@ func rsaPubkeyToSSHPubkey(rsakey rsa.PublicKey) (sshkey ssh.PublicKey, err error
 		return nil, err
 	}
 	return sshkey, nil
-}
-
-type AESEncryption struct {
-	EncodedKey string
-	Ciphertext string
 }
 
 func encodeAES(key []byte, plaintext string) (ciphertext string, err error) {
@@ -118,7 +108,7 @@ func decodeAES(key []byte, ciphertext string) (string, error) {
 // * encrypts the plaintext with AES256 using that random symmetric key -> cipherText
 // * encrypts the random symmetric key with the ssh PublicKey -> cipherKey
 // * returns the base64-encoded marshalled JSON for the ciphertext and key
-func CredulousEncode(plaintext string, pubkey ssh.PublicKey) (ciphertext string, err error) {
+func (c *Crypto) CredulousEncode(plaintext string, pubkey ssh.PublicKey) (ciphertext string, err error) {
 	rsaKey := sshPubkeyToRsaPubkey(pubkey)
 	randKey := make([]byte, 32)
 	_, err = rand.Read(randKey)
@@ -137,7 +127,7 @@ func CredulousEncode(plaintext string, pubkey ssh.PublicKey) (ciphertext string,
 	}
 	cipherKey := base64.StdEncoding.EncodeToString(out)
 
-	cipherStruct := AESEncryption{
+	cipherStruct := aesEncryption{
 		EncodedKey: cipherKey,
 		Ciphertext: encoded,
 	}
@@ -152,14 +142,14 @@ func CredulousEncode(plaintext string, pubkey ssh.PublicKey) (ciphertext string,
 	return ciphertext, nil
 }
 
-func CredulousDecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
+func (c *Crypto) CredulousDecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
 	in, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", err
 	}
 
 	// pull apart the layers of base64-encoded JSON
-	var encrypted AESEncryption
+	var encrypted aesEncryption
 	err = json.Unmarshal(in, &encrypted)
 	if err != nil {
 		return "", err
@@ -181,7 +171,7 @@ func CredulousDecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext s
 	return plaintext, nil
 }
 
-func CredulousDecodePureRSA(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
+func (c *Crypto) CredulousDecodePureRSA(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
 	in, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", err
@@ -194,7 +184,7 @@ func CredulousDecodePureRSA(ciphertext string, privkey *rsa.PrivateKey) (plainte
 	return plaintext, nil
 }
 
-func CredulousDecodeWithSalt(ciphertext string, salt string, privkey *rsa.PrivateKey) (plaintext string, err error) {
+func (c *Crypto) CredulousDecodeWithSalt(ciphertext string, salt string, privkey *rsa.PrivateKey) (plaintext string, err error) {
 	in, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", err
@@ -207,31 +197,7 @@ func CredulousDecodeWithSalt(ciphertext string, salt string, privkey *rsa.Privat
 	return plaintext, nil
 }
 
-func loadPrivateKey(filename string) (privateKey *rsa.PrivateKey, err error) {
-	var tmp []byte
-
-	if tmp, err = ioutil.ReadFile(filename); err != nil {
-		return &rsa.PrivateKey{}, err
-	}
-
-	pemblock, _ := pem.Decode([]byte(tmp))
-	if x509.IsEncryptedPEMBlock(pemblock) {
-		if tmp, err = decryptPEM(pemblock, filename); err != nil {
-			return &rsa.PrivateKey{}, err
-		}
-	} else {
-		log.Print("WARNING: Your private SSH key has no passphrase!")
-	}
-
-	key, err := ssh.ParseRawPrivateKey(tmp)
-	if err != nil {
-		return &rsa.PrivateKey{}, err
-	}
-	privateKey = key.(*rsa.PrivateKey)
-	return privateKey, nil
-}
-
-func SSHFingerprint(pubkey ssh.PublicKey) (fingerprint string) {
+func (c *Crypto) SSHFingerprint(pubkey ssh.PublicKey) (fingerprint string) {
 	binary := pubkey.Marshal()
 	hash := md5.Sum(binary)
 	// now add the colons
@@ -242,11 +208,11 @@ func SSHFingerprint(pubkey ssh.PublicKey) (fingerprint string) {
 	return fingerprint
 }
 
-func SSHPrivateFingerprint(privkey rsa.PrivateKey) (fingerprint string, err error) {
+func (c *Crypto) SSHPrivateFingerprint(privkey rsa.PrivateKey) (fingerprint string, err error) {
 	sshPubkey, err := rsaPubkeyToSSHPubkey(privkey.PublicKey)
 	if err != nil {
 		return "", err
 	}
-	fingerprint = SSHFingerprint(sshPubkey)
+	fingerprint = c.SSHFingerprint(sshPubkey)
 	return fingerprint, nil
 }

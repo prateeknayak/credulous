@@ -104,3 +104,33 @@ clean:
 
 allclean:
 	mock -r $(MOCK_CONFIG) --clean
+
+
+C_GOFILES_NOVENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
+C_GO_TEST_PKGS = $(shell docker-compose run go list ./...)
+
+
+deps:
+	docker-compose run dep ensure -v
+
+test:
+	docker-compose run go test ${C_GO_TEST_PKGS}
+
+gofmt:
+	@echo "+++ Formatting code with Gofmt"
+	@docker-compose run --rm gofmt -s -w ${C_GOFILES_NOVENDOR}
+
+goimports:
+	@echo "+++ Checking imports with go imports"
+	@docker-compose run --rm goimports -e -l -w ${C_GOFILES_NOVENDOR}
+
+lint:
+	@echo "+++ Running gometalinter"
+	@docker-compose run --rm gometalinter \
+	--sort linter \
+	--skip=client --skip=apis --skip=signals --skip vendor \
+	--deadline 400s \
+	--enable gofmt \
+	--enable goimports \
+	--enable gosimple \
+	./... --debug
