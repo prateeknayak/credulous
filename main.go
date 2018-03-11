@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 
+	"flag"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	awsiam "github.com/aws/aws-sdk-go/service/iam"
@@ -44,6 +46,6 @@ func main() {
 		cmd.NewListCommand(c),
 		cmd.NewRotateCommand(c),
 	}
-
+	flag.Parse()
 	app.Run(os.Args)
 }
