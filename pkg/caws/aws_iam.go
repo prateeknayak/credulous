@@ -7,7 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	awsiam "github.com/aws/aws-sdk-go/service/iam"
-	"github.com/prateeknayak/credulous/pkg/core"
+	"github.com/realestate-com-au/credulous/pkg/core"
 )
 
 type AWSIAMImpl struct {

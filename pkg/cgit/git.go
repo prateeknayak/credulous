@@ -5,7 +5,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/prateeknayak/credulous/pkg/core"
+	"github.com/realestate-com-au/credulous/pkg/core"
 	git "gopkg.in/libgit2/git2go.v25"
 )
 

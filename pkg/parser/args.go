@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/prateeknayak/credulous/pkg/core"
+	"github.com/realestate-com-au/credulous/pkg/core"
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh"
 )

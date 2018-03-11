@@ -16,7 +16,7 @@ import (
 
 	"sort"
 
-	"github.com/prateeknayak/credulous/pkg/handler"
+	"github.com/realestate-com-au/credulous/pkg/handler"
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh"
 )

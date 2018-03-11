@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prateeknayak/credulous/pkg/handler"
+	"github.com/realestate-com-au/credulous/pkg/handler"
 	. "github.com/smartystreets/goconvey/convey"
 	git "gopkg.in/libgit2/git2go.v25"
 )

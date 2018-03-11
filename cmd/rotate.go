@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/prateeknayak/credulous/pkg/core"
-	"github.com/prateeknayak/credulous/pkg/handler"
+	"github.com/realestate-com-au/credulous/pkg/core"
+	"github.com/realestate-com-au/credulous/pkg/handler"
 	"github.com/urfave/cli"
 )
 
