@@ -9,6 +9,14 @@ import (
 const ROTATE_TIMEOUT int = 30
 const FORMAT_VERSION string = "2014-06-12"
 
+type Credulous struct {
+	AccountInformer
+	ArgsParser
+	GitRepoDetector
+	CryptoOperator
+	CredsReadWriter
+}
+
 type AccessKey struct {
 	Username   string
 	KeyId      string

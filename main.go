@@ -17,38 +17,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-/*
-	AccountInformer
-	ArgsParser
-	GitRepoDetector
-	CryptoOperator
-	CredsReadWriter
-*/
-type Credulous struct {
-	core.AccountInformer
-	core.ArgsParser
-	core.GitRepoDetector
-	core.CryptoOperator
-	core.CredsReadWriter
-}
-
-func saveSetup() (core.Credulousier, error) {
-	sess, err := session.NewSession(aws.NewConfig())
-	if err != nil {
-		return nil, err
-	}
-	crypto := ccrypto.NewCrypto()
-
-	c := &Credulous{
-		caws.NewAWSIAMImpl(awsiam.New(sess)),
-		parser.NewParser(),
-		cgit.NewGitImpl(),
-		crypto,
-		creds.NewEncodeDecodeCreds(),
-	}
-	return c, nil
-}
-
 func main() {
 	sess, err := session.NewSession(aws.NewConfig())
 	if err != nil {
@@ -56,12 +24,12 @@ func main() {
 	}
 	crypto := ccrypto.NewCrypto()
 
-	c := &Credulous{
-		caws.NewAWSIAMImpl(awsiam.New(sess)),
-		parser.NewParser(),
-		cgit.NewGitImpl(),
-		crypto,
-		creds.NewEncodeDecodeCreds(),
+	c := &core.Credulous{
+		AccountInformer: caws.NewAWSIAMImpl(awsiam.New(sess)),
+		ArgsParser:      parser.NewParser(),
+		GitRepoDetector: cgit.NewGitImpl(),
+		CryptoOperator:  crypto,
+		CredsReadWriter: creds.NewEncodeDecodeCreds(),
 	}
 	app := cli.NewApp()
 	app.Name = "credulous"
