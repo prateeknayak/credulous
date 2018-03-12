@@ -1,12 +1,11 @@
 package cgit
 
 import (
-	"errors"
-	"path"
 	"time"
 
 	"github.com/realestate-com-au/credulous/pkg/core"
-	git "gopkg.in/libgit2/git2go.v25"
+	git "gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing/object"
 )
 
 type GitImpl struct{}
@@ -15,117 +14,56 @@ func NewGitImpl() *GitImpl {
 	return &GitImpl{}
 }
 
+// IsGitRepo checks if the path is a git repo or not
 func (g *GitImpl) IsGitRepo(checkpath string) (bool, error) {
-	ceiling := []string{checkpath}
 
-	repopath, err := git.Discover(checkpath, false, ceiling)
-	nonRepoErr := errors.New("Could not find repository from '" + checkpath + "'")
-	if err != nil && err.Error() != nonRepoErr.Error() {
+	_, err := git.PlainOpen(checkpath)
+	if err != nil {
+		if err == git.ErrRepositoryNotExists {
+			return false, nil
+		}
 		return false, err
 	}
-	if err != nil && err.Error() == nonRepoErr.Error() {
-		return false, nil
-	}
-	// the path is the parent of the repo, which appends '.cgit'
-	// to the path
-	dirpath := path.Dir(path.Clean(repopath))
-	if dirpath == checkpath {
-		return true, nil
-	}
-	return false, nil
+	return true, nil
 }
 
-func (g *GitImpl) GetRepoConfig(repo *git.Repository) (core.RepoConfig, error) {
-	config, err := repo.Config()
-	if err != nil {
-		return core.RepoConfig{}, err
-	}
-	name, err := config.LookupString("user.name")
-	if err != nil {
-		return core.RepoConfig{}, err
-	}
-	email, err := config.LookupString("user.email")
-	if err != nil {
-		return core.RepoConfig{}, err
-	}
-	repoconf := core.RepoConfig{
-		Name:  name,
-		Email: email,
-	}
-	return repoconf, nil
-}
+func (g *GitImpl) GitAddCommitFile(repopath, filename, message string, config core.RepoConfig) (commitId string, err error) {
 
-func (g *GitImpl) GitAddCommitFile(repopath, filename, message string) (commitId string, err error) {
-	repo, err := git.OpenRepository(repopath)
+	repo, err := git.PlainOpen(repopath)
 	if err != nil {
 		return "", err
 	}
 
-	config, err := g.GetRepoConfig(repo)
+	w, err := repo.Worktree()
 	if err != nil {
 		return "", err
 	}
 
-	index, err := repo.Index()
+	_, err = w.Add(filename)
 	if err != nil {
 		return "", err
-	}
 
-	err = index.AddByPath(filename)
+	}
+	_, err = w.Status()
 	if err != nil {
 		return "", err
+
+	}
+	author := &object.Signature{When: time.Now()}
+	if config.Name != "" {
+		author.Name = config.Name
+	}
+	if config.Email != "" {
+		author.Email = config.Email
 	}
 
-	err = index.Write()
+	commit, err := w.Commit(message, &git.CommitOptions{
+		Author: author,
+	})
+
 	if err != nil {
 		return "", err
-	}
 
-	treeId, err := index.WriteTree()
-	if err != nil {
-		return "", err
 	}
-
-	// new file is now staged, so we have to create a commit
-	sig := &git.Signature{
-		Name:  config.Name,
-		Email: config.Email,
-		When:  time.Now(),
-	}
-
-	tree, err := repo.LookupTree(treeId)
-	if err != nil {
-		return "", err
-	}
-
-	var commit *git.Oid
-
-	// TODO: find a non broken version of lib2git
-	//haslog, err := repo.HasLog("HEAD")
-	//if err != nil {
-	//	return "", err
-	//}
-	//if !haslog {
-	//	// In this case, the repo has been initialized, but nothing has ever been committed
-	//	commit, err = repo.CreateCommit("HEAD", sig, sig, message, tree)
-	//	if err != nil {
-	//		return "", err
-	//	}
-	//} else {
-	// In this case, the repo has commits
-	currentBranch, err := repo.Head()
-	if err != nil {
-		return "", err
-	}
-	currentTip, err := repo.LookupCommit(currentBranch.Target())
-	if err != nil {
-		return "", err
-	}
-	commit, err = repo.CreateCommit("HEAD", sig, sig, message, tree, currentTip)
-	if err != nil {
-		return "", err
-	}
-	//}
-
 	return commit.String(), nil
 }

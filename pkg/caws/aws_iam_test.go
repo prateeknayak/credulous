@@ -38,3 +38,18 @@ func TestAWSIAMImpl_GetAWSAccountAlias(t *testing.T) {
 	assert.NotEmpty(t, alias)
 	assert.Nil(t, err)
 }
+
+func TestAWSIAMImpl_GetKeyCreateDate(t *testing.T) {
+	i, err := setup()
+	if err != nil {
+		t.Fail()
+	}
+	name, err := i.GetAWSUsername()
+	if err != nil {
+		t.Fail()
+	}
+	alias, err := i.GetKeyCreateDate(name)
+
+	assert.NotEmpty(t, alias)
+	assert.Nil(t, err)
+}

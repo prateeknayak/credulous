@@ -59,7 +59,7 @@ type CredsReadWriter interface {
 
 type GitRepoDetector interface {
 	IsGitRepo(checkpath string) (bool, error)
-	GitAddCommitFile(repopath, filename, message string) (commitId string, err error)
+	GitAddCommitFile(repopath, filename, message string, config RepoConfig) (commitId string, err error)
 }
 
 type Credulousier interface {
@@ -92,12 +92,16 @@ func Save(i Credulousier, data SaveData) error {
 			}
 		}
 
-		date, _ := i.GetKeyCreateDate(data.Username)
-		t, err := time.Parse("2006-01-02T15:04:05Z", date.String())
-		keyCreateDate = t.Unix()
+		date, err := i.GetKeyCreateDate(data.Username)
 		if err != nil {
 			return err
 		}
+
+		t, err := time.Parse(time.RFC3339, date.Format(time.RFC3339))
+		if err != nil {
+			return err
+		}
+		keyCreateDate = t.Unix()
 	}
 
 	fmt.Printf("saving credentials for %s@%s\n", data.Username, data.Alias)
@@ -202,9 +206,6 @@ func ValidateCredentials(i AccountInformer, cred Credentials, alias string, user
 
 	return nil
 }
-func DisplayCred(output io.Writer, cred OldCredential) {
-	fmt.Fprintf(output, "export AWS_ACCESS_KEY_ID=\"%v\"\nexport AWS_SECRET_ACCESS_KEY=\"%v\"\n", cred.KeyId, cred.SecretKey)
-}
 
 func DisplayCreds(output io.Writer, cred Credentials) {
 	fmt.Fprintf(output, "export AWS_ACCESS_KEY_ID=\"%v\"\nexport AWS_SECRET_ACCESS_KEY=\"%v\"\n",
@@ -220,16 +221,19 @@ func DeleteOneKey(i AccountInformer, username string) error {
 		return err
 	}
 
+	if len(keys) == 1 {
+		return fmt.Errorf("only one key in the account; cannot delete")
+	}
 	// Find out which key to delete.
 	var oldestId string
 	var oldest int64
 	var oldestIndex int
 	for k, key := range keys {
-		t, err := time.Parse("2006-01-02T15:04:05Z", key.CreateDate.String())
-		createDate := t.Unix()
+		t, err := time.Parse(time.RFC3339, key.CreateDate.Format(time.RFC3339))
 		if err != nil {
 			return err
 		}
+		createDate := t.Unix()
 		// If we find an inactive one, just delete it
 		if key.Status == "Inactive" {
 			oldestId = key.KeyId
@@ -293,7 +297,7 @@ func WriteToDisk(cred Credentials, repo, filename string, g GitRepoDetector) (er
 		return nil
 	}
 	relpath := filepath.Join(cred.AccountAliasOrId, cred.IamUsername, filename)
-	_, err = g.GitAddCommitFile(repo, relpath, "Added by Credulous")
+	_, err = g.GitAddCommitFile(repo, relpath, "Added by Credulous", RepoConfig{Name: cred.IamUsername})
 	if err != nil {
 		return err
 	}

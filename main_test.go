@@ -1,4 +1,4 @@
-package main
+package main_test
 
 import (
 	"testing"
@@ -16,6 +16,13 @@ import (
 	"github.com/realestate-com-au/credulous/pkg/parser"
 	"github.com/stretchr/testify/assert"
 )
+
+// Set of Integration tests;
+// depends on ~/.aws/credentials
+// Do not wan't to use ENV Vars
+// Because of IDE shenanigans
+// if modifying make sure it still works with
+// ~/.aws/credentials
 
 func TestSaveComand(t *testing.T) {
 	sess, err := session.NewSession(aws.NewConfig())
@@ -39,17 +46,11 @@ func TestSaveComand(t *testing.T) {
 		os.Exit(1)
 	}
 
-	u, err := c.GetAWSUsername()
-	if err != nil {
-		t.Fail()
-		os.Exit(1)
-	}
 	s := core.SaveData{
 		Cred: core.Credential{
 			KeyId:     v.AccessKeyID,
 			SecretKey: v.SecretAccessKey,
 		},
-		Username: u,
 	}
 	err = core.Save(c, s)
 

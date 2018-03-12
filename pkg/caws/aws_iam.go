@@ -62,10 +62,6 @@ func (a *AWSIAMImpl) GetAllAccessKeys(username string) ([]core.AccessKey, error)
 		return nil, fmt.Errorf("cannot find any access key for username: %s", username)
 	}
 
-	// only one key
-	if len(output.AccessKeyMetadata) == 1 {
-		return nil, nil
-	}
 	var allKeys []core.AccessKey
 	for _, v := range output.AccessKeyMetadata {
 		allKeys = append(allKeys, core.AccessKey{
