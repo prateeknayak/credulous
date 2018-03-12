@@ -3,8 +3,8 @@ version: '2.3'
 services:
   base: &base
     volumes:
-      - .:/go/src/github.com/MYOB-Technology/ops-kube-alerting-rules-operator
-    working_dir: /go/src/github.com/MYOB-Technology/ops-kube-alerting-rules-operator
+      - .:/go/src/github.com/realestate-com-au/credulous
+    working_dir: /go/src/github.com/realestate-com-au/credulous
     build:
       context: .
       dockerfile: Dockerfile-alt
