@@ -43,7 +43,7 @@ func NewRotateCommand(i core.Credulousier) cli.Command {
 			handler.LogAndDieOnFatalError(err)
 
 			s.Force = c.Bool("force")
-			err = core.Save(i, *s)
+			err = core.Save(i, s)
 			handler.LogAndDieOnFatalError(err)
 		},
 	}

@@ -3,12 +3,12 @@ package handler
 import (
 	"os"
 
-	"github.com/golang/glog"
+	"fmt"
 )
 
 func LogAndDieOnFatalError(err error) {
 	if err != nil {
-		glog.Errorf("ERROR: %s\n", err)
+		fmt.Printf("ERROR: %s\n", err)
 		os.Exit(1)
 	}
 }

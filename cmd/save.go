@@ -48,13 +48,9 @@ func NewSaveCommand(i core.Credulousier) cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) {
-			args, err := i.ParseArgs(c)
+			s, err := i.ParseArgs(c)
 			if err != nil {
 				handler.LogAndDieOnFatalError(err)
-			}
-			s := core.SaveData{
-				Cred:     args.Cred,
-				Username: args.Username,
 			}
 			err = core.Save(i, s)
 			handler.LogAndDieOnFatalError(err)

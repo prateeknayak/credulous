@@ -71,7 +71,7 @@ type Credulousier interface {
 }
 
 // Credulous APIs called from main.go
-func Save(i Credulousier, data SaveData) error {
+func Save(i Credulousier, data *SaveData) error {
 
 	var keyCreateDate int64
 
