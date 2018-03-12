@@ -46,11 +46,12 @@ func TestSaveComand(t *testing.T) {
 		os.Exit(1)
 	}
 
-	s := core.SaveData{
+	s := &core.SaveData{
 		Cred: core.Credential{
 			KeyId:     v.AccessKeyID,
 			SecretKey: v.SecretAccessKey,
 		},
+		Repo: "local",
 	}
 	err = core.Save(c, s)
 
