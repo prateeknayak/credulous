@@ -15,7 +15,7 @@ func NewGitImpl() *GitImpl {
 }
 
 // IsGitRepo checks if the path is a git repo or not
-func (g *GitImpl) IsGitRepo(checkpath string) (bool, error) {
+func (g *GitImpl) IsValidStore(checkpath string) (bool, error) {
 
 	_, err := git.PlainOpen(checkpath)
 	if err != nil {
@@ -27,7 +27,7 @@ func (g *GitImpl) IsGitRepo(checkpath string) (bool, error) {
 	return true, nil
 }
 
-func (g *GitImpl) GitAddCommitFile(repopath, filename, message string, config core.RepoConfig) (commitId string, err error) {
+func (g *GitImpl) Persist(repopath, filename, message string, config core.RepoConfig) (commitId string, err error) {
 
 	repo, err := git.PlainOpen(repopath)
 	if err != nil {

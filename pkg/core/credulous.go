@@ -8,8 +8,6 @@ import (
 
 	"time"
 
-	"crypto/rsa"
-
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -17,58 +15,7 @@ import (
 	"sort"
 
 	"github.com/realestate-com-au/credulous/pkg/handler"
-	"github.com/urfave/cli"
-	"golang.org/x/crypto/ssh"
 )
-
-type FileLister interface {
-	Readdir(int) ([]os.FileInfo, error)
-	Name() string
-}
-
-type AccountInformer interface {
-	GetAWSUsername() (string, error)
-	GetAWSAccountAlias() (string, error)
-	GetAllAccessKeys(username string) ([]AccessKey, error)
-	DeleteAccessKey(key *AccessKey) error
-	CreateNewAccessKey(username string) (*AccessKey, error)
-	GetKeyCreateDate(username string) (time.Time, error)
-}
-
-type CryptoOperator interface {
-	CredulousEncode(plaintext string, pubkey ssh.PublicKey) (ciphertext string, err error)
-	CredulousDecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error)
-	CredulousDecodePureRSA(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error)
-	CredulousDecodeWithSalt(ciphertext string, salt string, privkey *rsa.PrivateKey) (plaintext string, err error)
-	SSHFingerprint(pubkey ssh.PublicKey) (fingerprint string)
-	SSHPrivateFingerprint(privkey rsa.PrivateKey) (fingerprint string, err error)
-	GenerateSalt() (string, error)
-}
-
-type ArgsParser interface {
-	ParseArgs(c *cli.Context) (*SaveData, error)
-}
-
-type CredsReadWriter interface {
-	FindDefaultDir(fl FileLister) (string, error)
-	GetDirs(fl FileLister) ([]os.FileInfo, error)
-	LatestFileInDir(dir string) (os.FileInfo, error)
-	ReadCredentialFile(c CryptoOperator, fileName string, keyfile string) (*Credentials, error)
-	GetPrivateKey(key string) (filename string)
-}
-
-type GitRepoDetector interface {
-	IsGitRepo(checkpath string) (bool, error)
-	GitAddCommitFile(repopath, filename, message string, config RepoConfig) (commitId string, err error)
-}
-
-type Credulousier interface {
-	AccountInformer
-	ArgsParser
-	GitRepoDetector
-	CryptoOperator
-	CredsReadWriter
-}
 
 // Credulous APIs called from main.go
 func Save(i Credulousier, data *SaveData) error {
@@ -80,19 +27,19 @@ func Save(i Credulousier, data *SaveData) error {
 	} else {
 		var err error
 		if data.Username == "" {
-			data.Username, err = i.GetAWSUsername()
+			data.Username, err = i.GetUsername()
 			if err != nil {
 				return err
 			}
 		}
 		if data.Alias == "" {
-			data.Alias, err = i.GetAWSAccountAlias()
+			data.Alias, err = i.GetAlias()
 			if err != nil {
 				return err
 			}
 		}
 
-		date, err := i.GetKeyCreateDate(data.Username)
+		date, err := i.GetKeyCreationDate(data.Username)
 		if err != nil {
 			return err
 		}
@@ -112,7 +59,7 @@ func Save(i Credulousier, data *SaveData) error {
 
 	encSlice := []Encryption{}
 	for _, pubkey := range data.Pubkeys {
-		encoded, err := i.CredulousEncode(string(plaintext), pubkey)
+		encoded, err := i.Encode(string(plaintext), pubkey)
 		if err != nil {
 			return err
 		}
@@ -141,12 +88,12 @@ func Save(i Credulousier, data *SaveData) error {
 }
 
 func GetAWSUsernameAndAlias(i AccountInformer) (string, string, error) {
-	username, err := i.GetAWSUsername()
+	username, err := i.GetUsername()
 	if err != nil {
 		return "", "", err
 	}
 
-	alias, err := i.GetAWSAccountAlias()
+	alias, err := i.GetAlias()
 	if err != nil {
 		return "", "", err
 	}
@@ -155,7 +102,7 @@ func GetAWSUsernameAndAlias(i AccountInformer) (string, string, error) {
 }
 
 func VerifyAccount(i AccountInformer, alias string) error {
-	acctAlias, err := i.GetAWSAccountAlias()
+	acctAlias, err := i.GetAlias()
 	if err != nil {
 		return err
 	}
@@ -166,7 +113,7 @@ func VerifyAccount(i AccountInformer, alias string) error {
 }
 
 func VerifyUser(i AccountInformer, username string) error {
-	name, err := i.GetAWSUsername()
+	name, err := i.GetUsername()
 	if err != nil {
 		return err
 	}
@@ -271,7 +218,7 @@ func RotateCredentials(i AccountInformer, username string) error {
 	if err != nil {
 		return err
 	}
-	_, err = i.CreateNewAccessKey(username)
+	_, err = i.CreateAccessKey(username)
 	if err != nil {
 		return err
 	}
@@ -333,7 +280,7 @@ func RetrieveCredentials(i Credulousier, rootPath string, alias string, username
 		return Credentials{}, err
 	}
 	filePath := filepath.Join(fullPath, latest.Name())
-	cred, err := i.ReadCredentialFile(i, filePath, keyfile)
+	cred, err := i.ReadCredentials(i, filePath, keyfile)
 	if err != nil {
 		return Credentials{}, err
 	}

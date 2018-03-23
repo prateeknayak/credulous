@@ -87,7 +87,7 @@ func NewSourceCommand(i core.Credulousier) cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) {
-			keyfile := i.GetPrivateKey(c.String("key"))
+			keyfile := i.GetKey(c.String("key"))
 			account, username, err := getAccountAndUserName(c)
 			if err != nil {
 				handler.LogAndDieOnFatalError(err)

@@ -26,7 +26,7 @@ func NewEncodeDecodeCreds() *EncodeDecodeCreds {
 	return &EncodeDecodeCreds{}
 }
 
-func (e *EncodeDecodeCreds) ReadCredentialFile(c core.CryptoOperator, fileName string, keyfile string) (*core.Credentials, error) {
+func (e *EncodeDecodeCreds) ReadCredentials(c core.CryptoOperator, fileName string, keyfile string) (*core.Credentials, error) {
 	b, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (e *EncodeDecodeCreds) ReadCredentialFile(c core.CryptoOperator, fileName s
 	var tmp string
 	switch {
 	case creds.Version == "2014-06-12":
-		tmp, err = c.CredulousDecodeAES(creds.Encryptions[offset].Ciphertext, privKey)
+		tmp, err = c.DecodeAES(creds.Encryptions[offset].Ciphertext, privKey)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +122,7 @@ func (e *EncodeDecodeCreds) LatestFileInDir(dir string) (os.FileInfo, error) {
 	return entries[len(entries)-1], nil
 }
 
-func (e *EncodeDecodeCreds) GetPrivateKey(name string) (filename string) {
+func (e *EncodeDecodeCreds) GetKey(name string) (filename string) {
 	if name == "" {
 		filename = filepath.Join(os.Getenv("HOME"), "/.ssh/id_rsa")
 	} else {

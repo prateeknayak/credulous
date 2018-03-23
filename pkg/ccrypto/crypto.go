@@ -108,7 +108,7 @@ func decodeAES(key []byte, ciphertext string) (string, error) {
 // * encrypts the plaintext with AES256 using that random symmetric key -> cipherText
 // * encrypts the random symmetric key with the ssh PublicKey -> cipherKey
 // * returns the base64-encoded marshalled JSON for the ciphertext and key
-func (c *Crypto) CredulousEncode(plaintext string, pubkey ssh.PublicKey) (ciphertext string, err error) {
+func (c *Crypto) Encode(plaintext string, pubkey ssh.PublicKey) (ciphertext string, err error) {
 	rsaKey := sshPubkeyToRsaPubkey(pubkey)
 	randKey := make([]byte, 32)
 	_, err = rand.Read(randKey)
@@ -142,7 +142,7 @@ func (c *Crypto) CredulousEncode(plaintext string, pubkey ssh.PublicKey) (cipher
 	return ciphertext, nil
 }
 
-func (c *Crypto) CredulousDecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
+func (c *Crypto) DecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
 	in, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", err
@@ -171,7 +171,7 @@ func (c *Crypto) CredulousDecodeAES(ciphertext string, privkey *rsa.PrivateKey) 
 	return plaintext, nil
 }
 
-func (c *Crypto) CredulousDecodePureRSA(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
+func (c *Crypto) DecodePureRSA(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
 	in, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", err
@@ -184,7 +184,7 @@ func (c *Crypto) CredulousDecodePureRSA(ciphertext string, privkey *rsa.PrivateK
 	return plaintext, nil
 }
 
-func (c *Crypto) CredulousDecodeWithSalt(ciphertext string, salt string, privkey *rsa.PrivateKey) (plaintext string, err error) {
+func (c *Crypto) DecodeWithSalt(ciphertext string, salt string, privkey *rsa.PrivateKey) (plaintext string, err error) {
 	in, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", err
