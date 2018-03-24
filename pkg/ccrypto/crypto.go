@@ -15,6 +15,14 @@ import (
 	"reflect"
 	"strings"
 
+	"encoding/pem"
+
+	"crypto/x509"
+
+	"os"
+
+	"github.com/howeyc/gopass"
+	"github.com/realestate-com-au/credulous/pkg/models"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -43,62 +51,6 @@ func (c *Crypto) GenerateSalt() (string, error) {
 	encoder.Encode(encoded, b)
 
 	return string(encoded), nil
-}
-
-func sshPubkeyToRsaPubkey(pubkey ssh.PublicKey) rsa.PublicKey {
-	s := reflect.ValueOf(pubkey).Elem()
-	rsaKey := rsa.PublicKey{
-		N: s.Field(0).Interface().(*big.Int),
-		E: s.Field(1).Interface().(int),
-	}
-	return rsaKey
-}
-
-func rsaPubkeyToSSHPubkey(rsakey rsa.PublicKey) (sshkey ssh.PublicKey, err error) {
-	sshkey, err = ssh.NewPublicKey(&rsakey)
-	if err != nil {
-		return nil, err
-	}
-	return sshkey, nil
-}
-
-func encodeAES(key []byte, plaintext string) (ciphertext string, err error) {
-	cipherBlock, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	// We need an unique IV to go at the front of the ciphertext
-	out := make([]byte, aes.BlockSize+len(plaintext))
-	iv := out[:aes.BlockSize]
-	_, err = io.ReadFull(rand.Reader, iv)
-	if err != nil {
-		return "", err
-	}
-
-	stream := cipher.NewCFBEncrypter(cipherBlock, iv)
-	stream.XORKeyStream(out[aes.BlockSize:], []byte(plaintext))
-	encoded := base64.StdEncoding.EncodeToString(out)
-	return encoded, nil
-}
-
-// takes a base64-encoded AES-encrypted ciphertext
-func decodeAES(key []byte, ciphertext string) (string, error) {
-	encrypted, err := base64.StdEncoding.DecodeString(ciphertext)
-	if err != nil {
-		return "", err
-	}
-
-	decrypter, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	iv := encrypted[:aes.BlockSize]
-	msg := encrypted[aes.BlockSize:]
-	aesDecrypter := cipher.NewCFBDecrypter(decrypter, iv)
-	aesDecrypter.XORKeyStream(msg, msg)
-	return string(msg), nil
 }
 
 // returns a base64 encoded ciphertext.
@@ -208,11 +160,101 @@ func (c *Crypto) SSHFingerprint(pubkey ssh.PublicKey) (fingerprint string) {
 	return fingerprint
 }
 
-func (c *Crypto) SSHPrivateFingerprint(privkey rsa.PrivateKey) (fingerprint string, err error) {
+func (c *Crypto) SSHPrivateFingerprint(privkey *rsa.PrivateKey) (fingerprint string, err error) {
 	sshPubkey, err := rsaPubkeyToSSHPubkey(privkey.PublicKey)
 	if err != nil {
 		return "", err
 	}
 	fingerprint = c.SSHFingerprint(sshPubkey)
 	return fingerprint, nil
+}
+
+func (c *Crypto) ParseKey(key models.PrivateKey) (*rsa.PrivateKey, error) {
+	var keyInBytes []byte
+	var err error
+
+	pemblock, _ := pem.Decode(key.Bytes)
+
+	if x509.IsEncryptedPEMBlock(pemblock) {
+
+		if _, err = fmt.Fprintf(os.Stderr, "Enter passphrase for %s: ", key.Name); err != nil {
+			return nil, err
+		}
+		passwd, err := gopass.GetPasswd()
+		decryptedBytes, err := x509.DecryptPEMBlock(pemblock, passwd)
+		if err != nil {
+			return nil, err
+		}
+
+		pemBytes := pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: decryptedBytes,
+		}
+		keyInBytes = pem.EncodeToMemory(&pemBytes)
+
+	} else {
+		keyInBytes = key.Bytes
+	}
+
+	k, err := ssh.ParseRawPrivateKey(keyInBytes)
+	if err != nil {
+		return nil, err
+	}
+	return k.(*rsa.PrivateKey), nil
+}
+
+func sshPubkeyToRsaPubkey(pubkey ssh.PublicKey) rsa.PublicKey {
+	s := reflect.ValueOf(pubkey).Elem()
+	rsaKey := rsa.PublicKey{
+		N: s.Field(0).Interface().(*big.Int),
+		E: s.Field(1).Interface().(int),
+	}
+	return rsaKey
+}
+
+func rsaPubkeyToSSHPubkey(rsakey rsa.PublicKey) (sshkey ssh.PublicKey, err error) {
+	sshkey, err = ssh.NewPublicKey(&rsakey)
+	if err != nil {
+		return nil, err
+	}
+	return sshkey, nil
+}
+
+func encodeAES(key []byte, plaintext string) (ciphertext string, err error) {
+	cipherBlock, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	// We need an unique IV to go at the front of the ciphertext
+	out := make([]byte, aes.BlockSize+len(plaintext))
+	iv := out[:aes.BlockSize]
+	_, err = io.ReadFull(rand.Reader, iv)
+	if err != nil {
+		return "", err
+	}
+
+	stream := cipher.NewCFBEncrypter(cipherBlock, iv)
+	stream.XORKeyStream(out[aes.BlockSize:], []byte(plaintext))
+	encoded := base64.StdEncoding.EncodeToString(out)
+	return encoded, nil
+}
+
+// takes a base64-encoded AES-encrypted ciphertext
+func decodeAES(key []byte, ciphertext string) (string, error) {
+	encrypted, err := base64.StdEncoding.DecodeString(ciphertext)
+	if err != nil {
+		return "", err
+	}
+
+	decrypter, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	iv := encrypted[:aes.BlockSize]
+	msg := encrypted[aes.BlockSize:]
+	aesDecrypter := cipher.NewCFBDecrypter(decrypter, iv)
+	aesDecrypter.XORKeyStream(msg, msg)
+	return string(msg), nil
 }

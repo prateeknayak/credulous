@@ -21,7 +21,7 @@ func TestEncode(t *testing.T) {
 			t.Fail()
 		}
 		plaintext := "some plaintext"
-		ciphertext, err := c.CredulousEncode(plaintext, pubkey)
+		ciphertext, err := c.Encode(plaintext, pubkey)
 		So(err, ShouldEqual, nil)
 		So(len(ciphertext), ShouldEqual, 556)
 	})
@@ -60,7 +60,7 @@ func TestDecodeAESCredential(t *testing.T) {
 		if err != nil {
 			t.Fail()
 		}
-		plaintext, err := c.CredulousDecodeAES(ciphertext, privkey)
+		plaintext, err := c.DecodeAES(ciphertext, privkey)
 		So(err, ShouldEqual, nil)
 		So(plaintext, ShouldEqual, "some plaintext")
 	})
@@ -83,7 +83,7 @@ func TestDecodeWithSalt(t *testing.T) {
 		}
 
 		salt := "pepper"
-		plaintext, err := c.CredulousDecodeWithSalt(ciphertext, salt, privkey)
+		plaintext, err := c.DecodeWithSalt(ciphertext, salt, privkey)
 		if err != nil {
 			t.Fail()
 		}
@@ -119,7 +119,7 @@ func TestSSHPrivateFingerprint(t *testing.T) {
 			t.Fatal()
 		}
 
-		fingerprint, err := c.SSHPrivateFingerprint(*privkey)
+		fingerprint, err := c.SSHPrivateFingerprint(privkey)
 		So(err, ShouldEqual, nil)
 		So(fingerprint, ShouldEqual, "c0:61:84:fc:e8:c9:52:dc:cd:a9:8e:82:a2:70:0a:30")
 	})

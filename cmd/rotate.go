@@ -36,10 +36,13 @@ func NewRotateCommand(i core.Credulousier) cli.Command {
 			s, err := i.ParseArgs(c)
 			handler.LogAndDieOnFatalError(err)
 
-			username, _, err := core.GetAWSUsernameAndAlias(i)
+			username, _, err := core.GetUsernameAndAlias(i)
 			handler.LogAndDieOnFatalError(err)
 
-			err = core.RotateCredentials(i, username)
+			err = core.DeleteOneKey(i, username)
+			handler.LogAndDieOnFatalError(err)
+
+			err = core.CreateKey(i, username)
 			handler.LogAndDieOnFatalError(err)
 
 			s.Force = c.Bool("force")

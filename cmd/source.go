@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/realestate-com-au/credulous/pkg/cio"
 	"github.com/realestate-com-au/credulous/pkg/core"
 	"github.com/realestate-com-au/credulous/pkg/handler"
 	"github.com/urfave/cli"
@@ -107,7 +108,8 @@ func NewSourceCommand(i core.Credulousier) cli.Command {
 					handler.LogAndDieOnFatalError(err)
 				}
 			}
-			core.DisplayCreds(os.Stdout, creds)
+			displayer := cio.NewConsoleWriter(os.Stdout)
+			core.DisplayCredentials(displayer, creds)
 		},
 	}
 }

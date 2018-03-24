@@ -19,7 +19,7 @@ func NewAWSIAMImpl(c *awsiam.IAM) *AWSIAMImpl {
 		client: c,
 	}
 }
-func (a *AWSIAMImpl) GetAWSUsername() (string, error) {
+func (a *AWSIAMImpl) GetUsername() (string, error) {
 	input := &awsiam.GetUserInput{}
 	output, err := a.client.GetUser(input)
 	if err != nil {
@@ -29,7 +29,7 @@ func (a *AWSIAMImpl) GetAWSUsername() (string, error) {
 	return *output.User.UserName, nil
 }
 
-func (a *AWSIAMImpl) GetAWSAccountAlias() (string, error) {
+func (a *AWSIAMImpl) GetAlias() (string, error) {
 
 	input := &awsiam.ListAccountAliasesInput{}
 	output, err := a.client.ListAccountAliases(input)
@@ -40,7 +40,7 @@ func (a *AWSIAMImpl) GetAWSAccountAlias() (string, error) {
 
 	// There really is only one alias
 	if len(output.AccountAliases) == 0 {
-		username, err := a.GetAWSUsername()
+		username, err := a.GetUsername()
 		if err != nil {
 			return "", err
 		}
@@ -86,7 +86,7 @@ func (a *AWSIAMImpl) DeleteAccessKey(key *core.AccessKey) error {
 	return nil
 }
 
-func (a *AWSIAMImpl) CreateNewAccessKey(username string) (*core.AccessKey, error) {
+func (a *AWSIAMImpl) CreateAccessKey(username string) (*core.AccessKey, error) {
 	input := &awsiam.CreateAccessKeyInput{
 		UserName: aws.String(username),
 	}
@@ -105,7 +105,7 @@ func (a *AWSIAMImpl) CreateNewAccessKey(username string) (*core.AccessKey, error
 	return key, nil
 }
 
-func (a *AWSIAMImpl) GetKeyCreateDate(username string) (time.Time, error) {
+func (a *AWSIAMImpl) GetKeyCreationDate(username string) (time.Time, error) {
 	keys, err := a.GetAllAccessKeys(username)
 	if err != nil {
 		return time.Time{}, err

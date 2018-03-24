@@ -12,6 +12,7 @@ import (
 	"github.com/realestate-com-au/credulous/pkg/caws"
 	"github.com/realestate-com-au/credulous/pkg/ccrypto"
 	"github.com/realestate-com-au/credulous/pkg/cgit"
+	"github.com/realestate-com-au/credulous/pkg/cio"
 	"github.com/realestate-com-au/credulous/pkg/core"
 	"github.com/realestate-com-au/credulous/pkg/creds"
 	"github.com/realestate-com-au/credulous/pkg/handler"
@@ -19,19 +20,46 @@ import (
 	"github.com/urfave/cli"
 )
 
+/**
+type Credulousier interface {
+	AccountInformer
+	ArgsParser
+	CredentialStorer
+	CryptoOperator
+	CredsReadWriter
+	Displayer
+	Writer
+	Reader
+}
+*/
+type Credulous struct {
+	core.AccountInformer
+	core.ArgsParser
+	core.CredentialStorer
+	core.CryptoOperator
+	core.CredsReadWriter
+	core.Displayer
+	core.Writer
+	core.Reader
+}
+
 func main() {
 	sess, err := session.NewSession(aws.NewConfig())
 	if err != nil {
 		handler.LogAndDieOnFatalError(err)
 	}
 	crypto := ccrypto.NewCrypto()
+	fileIO := cio.NewFileIO()
 
-	c := &core.Credulous{
-		AccountInformer: caws.NewAWSIAMImpl(awsiam.New(sess)),
-		ArgsParser:      parser.NewParser(),
-		GitRepoDetector: cgit.NewGitImpl(),
-		CryptoOperator:  crypto,
-		CredsReadWriter: creds.NewEncodeDecodeCreds(),
+	c := &Credulous{
+		AccountInformer:  caws.NewAWSIAMImpl(awsiam.New(sess)),
+		ArgsParser:       parser.NewParser(),
+		CredentialStorer: cgit.NewGitImpl(),
+		CryptoOperator:   crypto,
+		CredsReadWriter:  creds.NewEncodeDecodeCreds(),
+		Displayer:        cio.NewConsoleWriter(os.Stdout),
+		Writer:           fileIO,
+		Reader:           fileIO,
 	}
 	app := cli.NewApp()
 	app.Name = "credulous"

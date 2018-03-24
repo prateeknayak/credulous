@@ -5,19 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 
 	"path/filepath"
 
-	"github.com/howeyc/gopass"
 	"github.com/realestate-com-au/credulous/pkg/core"
 	"github.com/realestate-com-au/credulous/pkg/handler"
-	"golang.org/x/crypto/ssh"
+	"github.com/realestate-com-au/credulous/pkg/models"
 )
 
 type EncodeDecodeCreds struct{}
@@ -26,24 +22,9 @@ func NewEncodeDecodeCreds() *EncodeDecodeCreds {
 	return &EncodeDecodeCreds{}
 }
 
-func (e *EncodeDecodeCreds) ReadCredentials(c core.CryptoOperator, fileName string, keyfile string) (*core.Credentials, error) {
-	b, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	var creds core.Credentials
-	err = json.Unmarshal(b, &creds)
-	if err != nil {
-		return nil, err
-	}
-
-	privKey, err := loadPrivateKey(keyfile)
-	if err != nil {
-		return nil, err
-	}
-
-	fp, err := c.SSHPrivateFingerprint(*privKey)
+func (e *EncodeDecodeCreds) ReadCredentials(c core.CredsRetriever, b []byte, fp string, privKey *rsa.PrivateKey) (*models.Credentials, error) {
+	var creds models.Credentials
+	err := json.Unmarshal(b, &creds)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +51,7 @@ func (e *EncodeDecodeCreds) ReadCredentials(c core.CryptoOperator, fileName stri
 		}
 	}
 
-	var cred core.Credential
+	var cred models.Credential
 	err = json.Unmarshal([]byte(tmp), &cred)
 	if err != nil {
 		return nil, err
@@ -97,8 +78,15 @@ func (e *EncodeDecodeCreds) GetDirs(fl core.FileLister) ([]os.FileInfo, error) {
 	return dirs, nil
 }
 
-func (e *EncodeDecodeCreds) FindDefaultDir(fl core.FileLister) (string, error) {
-	dirs, err := e.GetDirs(fl)
+func (e *EncodeDecodeCreds) FindDefaultDir(rootPath string) (string, error) {
+	rootDir, err := os.Open(rootPath)
+	defer rootDir.Close()
+
+	if err != nil {
+		handler.LogAndDieOnFatalError(err)
+	}
+
+	dirs, err := e.GetDirs(rootDir)
 	if err != nil {
 		return "", err
 	}
@@ -129,54 +117,4 @@ func (e *EncodeDecodeCreds) GetKey(name string) (filename string) {
 		filename = name
 	}
 	return filename
-}
-
-func loadPrivateKey(filename string) (privateKey *rsa.PrivateKey, err error) {
-	var tmp []byte
-
-	if tmp, err = ioutil.ReadFile(filename); err != nil {
-		return &rsa.PrivateKey{}, err
-	}
-
-	pemblock, _ := pem.Decode([]byte(tmp))
-	if x509.IsEncryptedPEMBlock(pemblock) {
-		if tmp, err = decryptPEM(pemblock, filename); err != nil {
-			return &rsa.PrivateKey{}, err
-		}
-	} else {
-		log.Print("WARNING: Your private SSH key has no passphrase!")
-	}
-
-	key, err := ssh.ParseRawPrivateKey(tmp)
-	if err != nil {
-		return &rsa.PrivateKey{}, err
-	}
-	privateKey = key.(*rsa.PrivateKey)
-	return privateKey, nil
-}
-
-func decryptPEM(pemblock *pem.Block, filename string) ([]byte, error) {
-	var err error
-	if _, err = fmt.Fprintf(os.Stderr, "Enter passphrase for %s: ", filename); err != nil {
-		return []byte(""), err
-	}
-
-	// we already emit the prompt to stderr; GetPass only emits to stdout
-	passwd, err := gopass.GetPasswd()
-	fmt.Fprintln(os.Stderr, "")
-	if err != nil {
-		return []byte(""), err
-	}
-
-	var decryptedBytes []byte
-	if decryptedBytes, err = x509.DecryptPEMBlock(pemblock, passwd); err != nil {
-		return []byte(""), err
-	}
-
-	pemBytes := pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: decryptedBytes,
-	}
-	decryptedPEM := pem.EncodeToMemory(&pemBytes)
-	return decryptedPEM, nil
 }

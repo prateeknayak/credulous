@@ -1,4 +1,4 @@
-package main_test
+package main
 
 import (
 	"testing"
@@ -13,6 +13,7 @@ import (
 	"github.com/realestate-com-au/credulous/pkg/cgit"
 	"github.com/realestate-com-au/credulous/pkg/core"
 	"github.com/realestate-com-au/credulous/pkg/creds"
+	"github.com/realestate-com-au/credulous/pkg/models"
 	"github.com/realestate-com-au/credulous/pkg/parser"
 	"github.com/stretchr/testify/assert"
 )
@@ -33,12 +34,12 @@ func TestSaveComand(t *testing.T) {
 	client := iam.New(sess)
 	crypto := ccrypto.NewCrypto()
 
-	c := &core.Credulous{
-		AccountInformer: caws.NewAWSIAMImpl(client),
-		ArgsParser:      parser.NewParser(),
-		GitRepoDetector: cgit.NewGitImpl(),
-		CryptoOperator:  crypto,
-		CredsReadWriter: creds.NewEncodeDecodeCreds(),
+	c := &Credulous{
+		AccountInformer:  caws.NewAWSIAMImpl(client),
+		ArgsParser:       parser.NewParser(),
+		CredentialStorer: cgit.NewGitImpl(),
+		CryptoOperator:   crypto,
+		CredsReadWriter:  creds.NewEncodeDecodeCreds(),
 	}
 	v, err := client.Config.Credentials.Get()
 	if err != nil {
@@ -46,8 +47,8 @@ func TestSaveComand(t *testing.T) {
 		os.Exit(1)
 	}
 
-	s := &core.SaveData{
-		Cred: core.Credential{
+	s := &models.SaveData{
+		Cred: models.Credential{
 			KeyId:     v.AccessKeyID,
 			SecretKey: v.SecretAccessKey,
 		},

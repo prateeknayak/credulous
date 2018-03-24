@@ -1,24 +1,203 @@
 package core
 
 import (
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 
 	"time"
 
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"sort"
 
-	"github.com/realestate-com-au/credulous/pkg/handler"
+	"encoding/pem"
+
+	"github.com/realestate-com-au/credulous/pkg/models"
+	"github.com/urfave/cli"
+	"golang.org/x/crypto/ssh"
 )
 
+type Writer interface {
+	Write(b []byte, path, filename string) error
+}
+
+type Reader interface {
+	Read(filename string) ([]byte, error)
+}
+
+type FileLister interface {
+	Readdir(int) ([]os.FileInfo, error)
+	Name() string
+}
+
+type Displayer interface {
+	Display(message string)
+}
+
+// Account informer interfaces
+type UsernameGetter interface {
+	GetUsername() (string, error)
+}
+
+type AliasGetter interface {
+	GetAlias() (string, error)
+}
+
+type AllAccessKeyGetter interface {
+	GetAllAccessKeys(username string) ([]models.AccessKey, error)
+}
+
+type AccessKeyDeleter interface {
+	DeleteAccessKey(key *models.AccessKey) error
+}
+
+type AccessKeyCreater interface {
+	CreateAccessKey(username string) (*models.AccessKey, error)
+}
+
+type KeyCreationDateGetter interface {
+	GetKeyCreationDate(username string) (time.Time, error)
+}
+type UsernameAliasGetter interface {
+	UsernameGetter
+	AliasGetter
+}
+
+type OneKeyDeleter interface {
+	AllAccessKeyGetter
+	AccessKeyDeleter
+}
+
+type AccountInformer interface {
+	UsernameAliasGetter
+	OneKeyDeleter
+	AccessKeyCreater
+	KeyCreationDateGetter
+}
+
+// Crypto Operator interfaces
+
+type Encoder interface {
+	Encode(plaintext string, pubkey ssh.PublicKey) (ciphertext string, err error)
+}
+
+type AESDecoder interface {
+	DecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error)
+}
+
+type PureRSADecoder interface {
+	DecodePureRSA(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error)
+}
+
+type PemBlockDecoder interface {
+	DecodePemBlock(pemblock *pem.Block, passwd []byte) ([]byte, error)
+}
+type SaltDecoder interface {
+	DecodeWithSalt(ciphertext string, salt string, privkey *rsa.PrivateKey) (plaintext string, err error)
+}
+
+type FingerprintGetter interface {
+	SSHFingerprint(pubkey ssh.PublicKey) (fingerprint string)
+}
+
+type PrivateFingerprintGetter interface {
+	SSHPrivateFingerprint(privkey *rsa.PrivateKey) (fingerprint string, err error)
+}
+
+type RawKeyParser interface {
+	ParseKey(key models.PrivateKey) (*rsa.PrivateKey, error)
+}
+type SaltGenerator interface {
+	GenerateSalt() (string, error)
+}
+
+type CryptoOperator interface {
+	Encoder
+	AESDecoder
+	PureRSADecoder
+	SaltDecoder
+	FingerprintGetter
+	PrivateFingerprintGetter
+	SaltGenerator
+	RawKeyParser
+}
+
+// Credentials Reader Wirter
+
+type DefualtDirFinder interface {
+	FindDefaultDir(rootPath string) (string, error)
+}
+
+type DirGetter interface {
+	GetDirs(fl FileLister) ([]os.FileInfo, error)
+}
+
+type FileGetter interface {
+	LatestFileInDir(dir string) (os.FileInfo, error)
+}
+
+type CredsReader interface {
+	ReadCredentials(c CredsRetriever, b []byte, fp string, privKey *rsa.PrivateKey) (*models.Credentials, error)
+}
+
+type KeyGetter interface {
+	GetKey(key string) (filename string)
+}
+
+type CredsReadWriter interface {
+	DefualtDirFinder
+	DirGetter
+	FileGetter
+	CredsReader
+	KeyGetter
+}
+
+type CredsRetriever interface {
+	DefualtDirFinder
+	FileGetter
+	CredsReader
+	PrivateFingerprintGetter
+	AESDecoder
+	Reader
+	RawKeyParser
+}
+
+// Git operation
+type StoreDetector interface {
+	IsValidStore(checkpath string) (bool, error)
+}
+
+type Persister interface {
+	Persist(repopath, filename, message string, config models.RepoConfig) (commitId string, err error)
+}
+
+type CredentialStorer interface {
+	StoreDetector
+	Persister
+}
+
+// Args Parser interface
+
+type ArgsParser interface {
+	ParseArgs(c *cli.Context) (*models.SaveData, error)
+}
+
+type Credulousier interface {
+	AccountInformer
+	ArgsParser
+	CredentialStorer
+	CryptoOperator
+	CredsReadWriter
+	Displayer
+	Writer
+	Reader
+}
+
 // Credulous APIs called from main.go
-func Save(i Credulousier, data *SaveData) error {
+func Save(i Credulousier, data *models.SaveData) error {
 
 	var keyCreateDate int64
 
@@ -57,20 +236,20 @@ func Save(i Credulousier, data *SaveData) error {
 		return err
 	}
 
-	encSlice := []Encryption{}
+	encSlice := []models.Encryption{}
 	for _, pubkey := range data.Pubkeys {
 		encoded, err := i.Encode(string(plaintext), pubkey)
 		if err != nil {
 			return err
 		}
 
-		encSlice = append(encSlice, Encryption{
+		encSlice = append(encSlice, models.Encryption{
 			Ciphertext:  encoded,
 			Fingerprint: i.SSHFingerprint(pubkey),
 		})
 	}
-	creds := Credentials{
-		Version:          FORMAT_VERSION,
+	creds := models.Credentials{
+		Version:          models.FORMAT_VERSION,
 		AccountAliasOrId: data.Alias,
 		IamUsername:      data.Username,
 		CreateTime:       fmt.Sprintf("%d", keyCreateDate),
@@ -79,15 +258,17 @@ func Save(i Credulousier, data *SaveData) error {
 	}
 
 	filename := fmt.Sprintf("%v-%v.json", keyCreateDate, data.Cred.KeyId[12:])
-	err = WriteToDisk(creds, data.Repo, filename, i)
+
+	err = writeCredentialsTofile(i, creds, data.Repo, filename)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	err = storeCreds(i, data.Username, data.Repo, filepath.Join(data.Username, data.Alias, filename))
+	return err
 }
 
-func GetAWSUsernameAndAlias(i AccountInformer) (string, string, error) {
+func GetUsernameAndAlias(i UsernameAliasGetter) (string, string, error) {
 	username, err := i.GetUsername()
 	if err != nil {
 		return "", "", err
@@ -101,7 +282,7 @@ func GetAWSUsernameAndAlias(i AccountInformer) (string, string, error) {
 	return username, alias, nil
 }
 
-func VerifyAccount(i AccountInformer, alias string) error {
+func VerifyAccount(i AliasGetter, alias string) error {
 	acctAlias, err := i.GetAlias()
 	if err != nil {
 		return err
@@ -112,7 +293,7 @@ func VerifyAccount(i AccountInformer, alias string) error {
 	return fmt.Errorf("cannot verify account, does not match alias: %s", alias)
 }
 
-func VerifyUser(i AccountInformer, username string) error {
+func VerifyUser(i UsernameGetter, username string) error {
 	name, err := i.GetUsername()
 	if err != nil {
 		return err
@@ -123,7 +304,7 @@ func VerifyUser(i AccountInformer, username string) error {
 	return fmt.Errorf("cannot verify user, does not match access keys: %s", username)
 }
 
-func ValidateCredentials(i AccountInformer, cred Credentials, alias string, username string) error {
+func ValidateCredentials(i UsernameAliasGetter, cred models.Credentials, alias string, username string) error {
 	if cred.IamUsername != username {
 		err := errors.New("FATAL: username in credential does not match requested username")
 		return err
@@ -154,15 +335,24 @@ func ValidateCredentials(i AccountInformer, cred Credentials, alias string, user
 	return nil
 }
 
-func DisplayCreds(output io.Writer, cred Credentials) {
-	fmt.Fprintf(output, "export AWS_ACCESS_KEY_ID=\"%v\"\nexport AWS_SECRET_ACCESS_KEY=\"%v\"\n",
-		cred.Encryptions[0].Decoded.KeyId, cred.Encryptions[0].Decoded.SecretKey)
+func DisplayCredentials(i Displayer, cred models.Credentials) {
+
+	i.Display(fmt.Sprintf(
+		"export AWS_ACCESS_KEY_ID=\"%v\"\nexport AWS_SECRET_ACCESS_KEY=\"%v\"\n",
+		cred.Encryptions[0].Decoded.KeyId,
+		cred.Encryptions[0].Decoded.SecretKey,
+	))
+
 	for key, val := range cred.Encryptions[0].Decoded.EnvVars {
-		fmt.Fprintf(output, "export %s=\"%s\"\n", key, val)
+		i.Display(fmt.Sprintf(
+			"export %s=\"%s\"\n",
+			key,
+			val,
+		))
 	}
 }
 
-func DeleteOneKey(i AccountInformer, username string) error {
+func DeleteOneKey(i OneKeyDeleter, username string) error {
 	keys, err := i.GetAllAccessKeys(username)
 	if err != nil {
 		return err
@@ -213,76 +403,58 @@ func DeleteOneKey(i AccountInformer, username string) error {
 //     * new one is inactive
 //     * old one is inactive
 // * We successfully delete the oldest key, but fail in creating the new key (eg network, permission issues)
-func RotateCredentials(i AccountInformer, username string) error {
-	err := DeleteOneKey(i, username)
-	if err != nil {
-		return err
-	}
-	_, err = i.CreateAccessKey(username)
-	if err != nil {
-		return err
-	}
-	return nil
+func CreateKey(i AccessKeyCreater, username string) error {
+	_, err := i.CreateAccessKey(username)
+	return err
 }
 
-func WriteToDisk(cred Credentials, repo, filename string, g GitRepoDetector) (err error) {
-	b, err := json.Marshal(cred)
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(repo, cred.AccountAliasOrId, cred.IamUsername)
-	os.MkdirAll(path, 0700)
-	err = ioutil.WriteFile(filepath.Join(path, filename), b, 0600)
-	if err != nil {
-		return err
-	}
-	isrepo, err := g.IsGitRepo(repo)
-	if err != nil {
-		return err
-	}
-	if !isrepo {
-		return nil
-	}
-	relpath := filepath.Join(cred.AccountAliasOrId, cred.IamUsername, filename)
-	_, err = g.GitAddCommitFile(repo, relpath, "Added by Credulous", RepoConfig{Name: cred.IamUsername})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func RetrieveCredentials(i Credulousier, rootPath string, alias string, username string, keyfile string) (Credentials, error) {
-	rootDir, err := os.Open(rootPath)
-	if err != nil {
-		handler.LogAndDieOnFatalError(err)
-	}
-
+func RetrieveCredentials(i CredsRetriever, rootPath string, alias string, username string, keyfile string) (c models.Credentials, err error) {
 	if alias == "" {
-		if alias, err = i.FindDefaultDir(rootDir); err != nil {
-			handler.LogAndDieOnFatalError(err)
+		alias, err = i.FindDefaultDir(rootPath)
+		if err != nil {
+			return
 		}
 	}
 
 	if username == "" {
-		aliasDir, err := os.Open(filepath.Join(rootPath, alias))
+		username, err = i.FindDefaultDir(filepath.Join(rootPath, alias))
 		if err != nil {
-			handler.LogAndDieOnFatalError(err)
-		}
-		username, err = i.FindDefaultDir(aliasDir)
-		if err != nil {
-			handler.LogAndDieOnFatalError(err)
+			return
 		}
 	}
 
 	fullPath := filepath.Join(rootPath, alias, username)
+
 	latest, err := i.LatestFileInDir(fullPath)
 	if err != nil {
-		return Credentials{}, err
+		return
 	}
-	filePath := filepath.Join(fullPath, latest.Name())
-	cred, err := i.ReadCredentials(i, filePath, keyfile)
+
+	rawKey, err := i.Read(keyfile)
 	if err != nil {
-		return Credentials{}, err
+		return
+	}
+
+	privKey, err := i.ParseKey(models.PrivateKey{Bytes: rawKey, Name: keyfile})
+	if err != nil {
+		return
+	}
+
+	fp, err := i.SSHPrivateFingerprint(privKey)
+	if err != nil {
+		return
+	}
+
+	filePath := filepath.Join(fullPath, latest.Name())
+
+	b, err := i.Read(filePath)
+	if err != nil {
+		return
+	}
+
+	cred, err := i.ReadCredentials(i, b, fp, privKey)
+	if err != nil {
+		return
 	}
 
 	return *cred, nil
@@ -348,4 +520,25 @@ func ListAvailableCredentials(c CredsReadWriter, rootDir FileLister) ([]string, 
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+func storeCreds(i CredentialStorer, user, repo, path string) (err error) {
+	isRepo, err := i.IsValidStore(repo)
+	if err != nil {
+		return err
+	}
+	if !isRepo {
+		return nil
+	}
+	_, err = i.Persist(repo, path, "Added by Credulous", models.RepoConfig{Name: user})
+	return err
+}
+
+func writeCredentialsTofile(i Writer, cred models.Credentials, repo, filename string) error {
+	b, err := json.Marshal(cred)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(repo, cred.AccountAliasOrId, cred.IamUsername)
+	return i.Write(b, path, filename)
 }

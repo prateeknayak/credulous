@@ -1,4 +1,4 @@
-package core
+package models
 
 import (
 	"time"
@@ -8,14 +8,6 @@ import (
 
 const ROTATE_TIMEOUT int = 30
 const FORMAT_VERSION string = "2014-06-12"
-
-type Credulous struct {
-	AccountInformer
-	ArgsParser
-	GitRepoDetector
-	CryptoOperator
-	CredsReadWriter
-}
 
 type AccessKey struct {
 	Username   string
@@ -78,4 +70,9 @@ type Encryption struct {
 	Fingerprint string
 	Ciphertext  string
 	Decoded     Credential
+}
+
+type PrivateKey struct {
+	Bytes []byte
+	Name  string
 }
