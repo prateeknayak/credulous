@@ -7,6 +7,10 @@ import (
 
 	"time"
 
+	"crypto/rsa"
+
+	"path/filepath"
+
 	"github.com/realestate-com-au/credulous/pkg/models"
 	"github.com/stretchr/testify/assert"
 )
@@ -293,4 +297,94 @@ func TestDeleteOneKey_Happy(t *testing.T) {
 
 }
 
-type fakeCredsRetriever struct{}
+type fakeCredsRetriever struct {
+	c           *models.CredsInfo
+	ReadBytes   []byte
+	rsaKey      *rsa.PrivateKey
+	fingerPrint string
+	plaintext   string
+}
+
+func (f *fakeCredsRetriever) LatestFileInDir(dir string) (*models.CredsInfo, error) {
+	if f.c == nil {
+		return nil, fmt.Errorf("creds info error")
+	}
+	return f.c, nil
+}
+
+func (f *fakeCredsRetriever) Read(filename string) ([]byte, error) {
+	if len(f.ReadBytes) < 1 {
+		return nil, fmt.Errorf("read file error")
+	}
+	return f.ReadBytes, nil
+}
+
+func (f *fakeCredsRetriever) ParseKey(key models.PrivateKey) (*rsa.PrivateKey, error) {
+	if f.rsaKey == nil {
+		return nil, fmt.Errorf("parsekey error")
+	}
+	return f.rsaKey, nil
+}
+
+func (f *fakeCredsRetriever) ReadCredentials(c CredsRetriever, b []byte, fp string, privKey *rsa.PrivateKey) (*models.Credentials, error) {
+	return &models.Credentials{IamUsername: "user", AccountAliasOrId: "alias"}, nil
+}
+
+func (f *fakeCredsRetriever) SSHPrivateFingerprint(privkey *rsa.PrivateKey) (fingerprint string, err error) {
+	if f.fingerPrint == "" {
+		return "", fmt.Errorf("fingerprint error")
+	}
+	return f.fingerPrint, nil
+}
+
+func (f *fakeCredsRetriever) DecodeAES(ciphertext string, privkey *rsa.PrivateKey) (plaintext string, err error) {
+	if f.plaintext == "" {
+		return "", fmt.Errorf("plaintext error")
+	}
+	return f.plaintext, nil
+}
+
+func TestRetrieveCredentials_LatestFileInDirErr(t *testing.T) {
+	f := &fakeCredsRetriever{}
+
+	req := &models.RetrieveRequest{FullPath: filepath.Join("user", "alias", "root"), Keyfile: "file"}
+	c, err := RetrieveCredentials(f, req)
+	assert.NotNil(t, err)
+	assert.Nil(t, c)
+	assert.Equal(t, fmt.Errorf("creds info error"), err)
+}
+
+func TestRetrieveCredentials_ReadKeyErr(t *testing.T) {
+	f := &fakeCredsRetriever{
+		c: &models.CredsInfo{},
+	}
+	req := &models.RetrieveRequest{FullPath: filepath.Join("user", "alias", "root"), Keyfile: "file"}
+	c, err := RetrieveCredentials(f, req)
+	assert.NotNil(t, err)
+	assert.Nil(t, c)
+	assert.Equal(t, fmt.Errorf("read file error"), err)
+}
+
+func TestRetrieveCredentials_ParseKeyErr(t *testing.T) {
+	f := &fakeCredsRetriever{
+		c: &models.CredsInfo{},
+	}
+	req := &models.RetrieveRequest{FullPath: filepath.Join("user", "alias", "root"), Keyfile: "file"}
+	c, err := RetrieveCredentials(f, req)
+	assert.NotNil(t, err)
+	assert.Nil(t, c)
+	assert.Equal(t, fmt.Errorf("read file error"), err)
+}
+
+func TestRetrieveCredentials_SSHPrivateFingerPrintErr(t *testing.T) {
+	f := &fakeCredsRetriever{
+		c:         &models.CredsInfo{},
+		ReadBytes: []byte("banana"),
+		rsaKey:    &rsa.PrivateKey{},
+	}
+	req := &models.RetrieveRequest{FullPath: filepath.Join("user", "alias", "root"), Keyfile: "file"}
+	c, err := RetrieveCredentials(f, req)
+	assert.NotNil(t, err)
+	assert.Nil(t, c)
+	assert.Equal(t, fmt.Errorf("fingerprint error"), err)
+}

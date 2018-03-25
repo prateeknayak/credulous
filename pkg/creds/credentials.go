@@ -83,7 +83,7 @@ func (e *EncodeDecodeCreds) FindDefaultDir(rootPath string) (string, error) {
 	defer rootDir.Close()
 
 	if err != nil {
-		handler.LogAndDieOnFatalError(err)
+		return "", err
 	}
 
 	dirs, err := e.GetDirs(rootDir)
@@ -101,13 +101,17 @@ func (e *EncodeDecodeCreds) FindDefaultDir(rootPath string) (string, error) {
 	return dirs[0].Name(), nil
 }
 
-func (e *EncodeDecodeCreds) LatestFileInDir(dir string) (os.FileInfo, error) {
+func (e *EncodeDecodeCreds) LatestFileInDir(dir string) (*models.CredsInfo, error) {
 	entries, err := ioutil.ReadDir(dir)
 	handler.LogAndDieOnFatalError(err)
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("no credentials have been saved for that user and account; please run 'credulous save' first")
 	}
-	return entries[len(entries)-1], nil
+	info := &models.CredsInfo{
+		Name: entries[len(entries)-1].Name(),
+	}
+
+	return info, nil
 }
 
 func (e *EncodeDecodeCreds) GetKey(name string) (filename string) {

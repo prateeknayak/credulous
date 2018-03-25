@@ -136,7 +136,7 @@ type DirGetter interface {
 }
 
 type FileGetter interface {
-	LatestFileInDir(dir string) (os.FileInfo, error)
+	LatestFileInDir(dir string) (*models.CredsInfo, error)
 }
 
 type CredsReader interface {
@@ -156,7 +156,6 @@ type CredsReadWriter interface {
 }
 
 type CredsRetriever interface {
-	DefualtDirFinder
 	FileGetter
 	CredsReader
 	PrivateFingerprintGetter
@@ -408,34 +407,19 @@ func CreateKey(i AccessKeyCreater, username string) error {
 	return err
 }
 
-func RetrieveCredentials(i CredsRetriever, rootPath string, alias string, username string, keyfile string) (c models.Credentials, err error) {
-	if alias == "" {
-		alias, err = i.FindDefaultDir(rootPath)
-		if err != nil {
-			return
-		}
-	}
+func RetrieveCredentials(i CredsRetriever, req *models.RetrieveRequest) (c *models.Credentials, err error) {
 
-	if username == "" {
-		username, err = i.FindDefaultDir(filepath.Join(rootPath, alias))
-		if err != nil {
-			return
-		}
-	}
-
-	fullPath := filepath.Join(rootPath, alias, username)
-
-	latest, err := i.LatestFileInDir(fullPath)
+	latest, err := i.LatestFileInDir(req.FullPath)
 	if err != nil {
 		return
 	}
 
-	rawKey, err := i.Read(keyfile)
+	rawKey, err := i.Read(req.Keyfile)
 	if err != nil {
 		return
 	}
 
-	privKey, err := i.ParseKey(models.PrivateKey{Bytes: rawKey, Name: keyfile})
+	privKey, err := i.ParseKey(models.PrivateKey{Bytes: rawKey, Name: req.Keyfile})
 	if err != nil {
 		return
 	}
@@ -445,7 +429,7 @@ func RetrieveCredentials(i CredsRetriever, rootPath string, alias string, userna
 		return
 	}
 
-	filePath := filepath.Join(fullPath, latest.Name())
+	filePath := filepath.Join(req.FullPath, latest.Name)
 
 	b, err := i.Read(filePath)
 	if err != nil {
@@ -457,7 +441,7 @@ func RetrieveCredentials(i CredsRetriever, rootPath string, alias string, userna
 		return
 	}
 
-	return *cred, nil
+	return cred, nil
 }
 
 func ListAvailableCredentials(c CredsReadWriter, rootDir FileLister) ([]string, error) {
@@ -505,7 +489,7 @@ func ListAvailableCredentials(c CredsReadWriter, rootDir FileLister) ([]string, 
 				if err != nil {
 					return nil, err
 				}
-				if latest.Name() != "" {
+				if latest.Name != "" {
 					creds[userDirent.Name()+"@"+aliasDirent.Name()] += 1
 				}
 			}

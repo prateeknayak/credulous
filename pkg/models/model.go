@@ -76,3 +76,14 @@ type PrivateKey struct {
 	Bytes []byte
 	Name  string
 }
+
+// defining models
+type RetrieveRequest struct {
+	FullPath string
+	Keyfile  string
+}
+
+type CredsInfo struct {
+	Name       string
+	UpdateTime time.Time
+}

@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"strings"
 
+	"path/filepath"
+
 	"github.com/realestate-com-au/credulous/pkg/cio"
 	"github.com/realestate-com-au/credulous/pkg/core"
 	"github.com/realestate-com-au/credulous/pkg/handler"
+	"github.com/realestate-com-au/credulous/pkg/models"
 	"github.com/urfave/cli"
 )
 
@@ -97,19 +100,38 @@ func NewSourceCommand(i core.Credulousier) cli.Command {
 			if err != nil {
 				handler.LogAndDieOnFatalError(err)
 			}
-			creds, err := core.RetrieveCredentials(i, repo, account, username, keyfile)
+
+			if account == "" {
+				account, err = i.FindDefaultDir(repo)
+				if err != nil {
+					handler.LogAndDieOnFatalError(err)
+				}
+			}
+
+			if username == "" {
+				username, err = i.FindDefaultDir(filepath.Join(repo, account))
+				if err != nil {
+					handler.LogAndDieOnFatalError(err)
+				}
+			}
+
+			req := &models.RetrieveRequest{
+				FullPath: filepath.Join(repo, account, username),
+				Keyfile:  keyfile,
+			}
+			creds, err := core.RetrieveCredentials(i, req)
 			if err != nil {
 				handler.LogAndDieOnFatalError(err)
 			}
 
 			if !c.Bool("force") {
-				err = core.ValidateCredentials(i, creds, account, username)
+				err = core.ValidateCredentials(i, *creds, account, username)
 				if err != nil {
 					handler.LogAndDieOnFatalError(err)
 				}
 			}
 			displayer := cio.NewConsoleWriter(os.Stdout)
-			core.DisplayCredentials(displayer, creds)
+			core.DisplayCredentials(displayer, *creds)
 		},
 	}
 }
